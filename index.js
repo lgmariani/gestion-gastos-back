@@ -101,6 +101,24 @@ app.get("/gastos/:id", async (req, res) => {
 });
 
 
+app.get('/get-total-by-person', async (req, res) => {
+  try {
+      const totalesPorPersona = await Gasto.findAll({
+          attributes: [
+              'pagador',
+              [sequelize.fn('SUM', sequelize.col('valor')), 'totalGastado']
+          ],
+          group: ['pagador']
+      });
+
+      res.json(totalesPorPersona);
+  } catch (error) {
+      console.error('Error al obtener los totales:', error);
+      res.status(500).send('Ocurrió un error al procesar tu solicitud');
+  }
+});
+
+
 app.post("/gastos", async (req, res) => {
   console.log("hellou " + JSON.stringify(req.body));
 
