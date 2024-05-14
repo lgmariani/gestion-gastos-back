@@ -1,187 +1,115 @@
 const express = require("express");
-const bodyParser = require("body-parser");
-const { Sequelize, DataTypes } = require("sequelize");
-
-//const sequelize = new Sequelize('sqlite::memory:'); // Base de datos en memoria
-
-const sequelize = new Sequelize("sqlite::memory:", {
-  host: "localhost",
-  dialect: "sqlite",
-  logging: console.log, // Habilita el logging de todas las consultas SQL
-});
-
 const cors = require("cors");
+const bodyParser = require("body-parser");
+const mysql = require('mysql2/promise');
 
-const fs = require("fs");
+// Configuración de la conexión a la base de datos MySQL
+const pool = mysql.createPool({
+  host: 'localhost',
+  user: 'ggadmin',
+  password: 'pqpq2020',
+  database: 'gestion-gastos',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
 
 const app = express();
 const PORT = 3005;
 
+app.use(cors({ origin: '*' }));
+
 app.use(bodyParser.json());
-app.use(cors());
 
-// Definición del modelo Gasto
-const Gasto = sequelize.define(
-  "Gasto",
-  {
-    valor: {
-      type: DataTypes.FLOAT,
-      allowNull: false,
-    },
-    fecha: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
-    pagador: {
-      type: DataTypes.NUMBER,
-      allowNull: false,
-    },
-    titulo: {
-      type: DataTypes.STRING,
-    },
-    categoria: {
-      type: DataTypes.NUMBER,
-      allowNull: false,
-    },
-    repartirentre: {
-      type: DataTypes.NUMBER,
-      allowNull: false,
-    },
-  },
-  {
-    // Opciones adicionales
-  }
-);
-
-// Sincroniza el modelo con la base de datos
-sequelize.sync();
-
-sequelize
-  .sync()
-  .then(() => {
-    console.log("Base de datos sincronizada.");
-
-    // Lee el archivo SQL y ejecuta las instrucciones
-    const sql = fs.readFileSync("data.sql", "utf8");
-
-    // Divide el archivo en instrucciones individuales
-    const queries = sql
-      .split(";")
-      .map((query) => query.trim())
-      .filter((query) => query.length);
-
-    // Ejecuta cada instrucción SQL por separado
-    for (let query of queries) {
-      sequelize.query(query + ";").catch((error) => {
-        console.error(
-          "Error al ejecutar la consulta:",
-          query,
-          "\nError:",
-          error
-        );
-      });
-    }
-  })
-  .catch((error) => {
-    console.error("Error al sincronizar la base de datos:", error);
-  });
-sequelize.sync();
-
-// Rutas CRUD
+// Endpoint para obtener todos los gastos
 app.get("/gastos", async (req, res) => {
-  const gastos = await Gasto.findAll();
-  res.json(gastos);
-});
-
-
-
-
-app.get("/gastos/:id", async (req, res) => {
-  const { id } = req.params;
-
-  console.log("id: " + id);
-  
   try {
-    const gasto = await Gasto.findByPk(id);
-
-    if (!gasto) {
-      return res.status(404).json({ error: "Gasto not found" });
-    }
-
-    res.json(gasto);
+    const [rows, fields] = await pool.query('SELECT * FROM Gastos');
+    res.json(rows);
   } catch (error) {
-    console.error("Error al obtener el gasto:", error);
+    console.error("Error al obtener los gastos:", error.message);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
+// Endpoint para obtener un gasto por ID
+app.get("/gastos/:id", async (req, res) => {
+  try {
+    const [rows, fields] = await pool.query('SELECT * FROM Gastos WHERE id = ?', [req.params.id]);
+    if (rows.length > 0) {
+      res.json(rows[0]);
+    } else {
+      res.status(404).json({ error: "Gasto not found" });
+    }
+  } catch (error) {
+    console.error("Error al obtener el gasto:", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
+// Endpoint para agregar un nuevo gasto
+app.post("/gastos", async (req, res) => {
+  try {
+    const { valor, fecha, pagador, titulo, categoria, repartirentre } = req.body;
+    const result = await pool.query('INSERT INTO Gastos (valor, fecha, pagador, titulo, categoria, repartirentre) VALUES (?, ?, ?, ?, ?, ?)', [valor, fecha, pagador, titulo, categoria, repartirentre]);
+    res.status(201).json({ id: result[0].insertId, ...req.body });
+  } catch (error) {
+    console.error("Error al crear el gasto:", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
+// Endpoint para actualizar un gasto
+app.put("/gastos/:id", async (req, res) => {
+  try {
+    const { valor, fecha, pagador, titulo, categoria, repartirentre } = req.body;
+    const result = await pool.query('UPDATE Gastos SET valor = ?, fecha = ?, pagador = ?, titulo = ?, categoria = ?, repartirentre = ? WHERE id = ?', [valor, fecha, pagador, titulo, categoria, repartirentre, req.params.id]);
+    if (result[0].affectedRows > 0) {
+      res.json({ id: req.params.id, ...req.body });
+    } else {
+      res.status(404).json({ error: "Gasto not found" });
+    }
+  } catch (error) {
+    console.error("Error al actualizar el gasto:", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
+// Endpoint para eliminar un gasto
+app.delete("/gastos/:id", async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM Gastos WHERE id = ?', [req.params.id]);
+    if (result[0].affectedRows > 0) {
+      res.json({ message: "Gasto deleted" });
+    } else {
+      res.status(404).json({ error: "Gasto not found" });
+    }
+  } catch (error) {
+    console.error("Error al eliminar el gasto:", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
+// Solucionar el problema con la vista 'total-by-person'
+app.get('/get-total-by-person-new', async (req, res) => {
+  try {
+      const [rows, fields] = await pool.query('SELECT * FROM total_by_person');
+      res.json(rows);
+  } catch (error) {
+      console.error('Error al obtener los totales:', error.message);
+      res.status(500).json({ error: "Internal server error" });
+  }
+});
 
+// Solucionar el problema con la vista 'total-by-person'
 app.get('/get-total-by-person', async (req, res) => {
   try {
-      const totalesPorPersona = await Gasto.findAll({
-          attributes: [
-              'pagador',
-              [sequelize.fn('SUM', sequelize.col('valor')), 'totalGastado']
-          ],
-          group: ['pagador']
-      });
-
-      res.json(totalesPorPersona);
+      const [rows, fields] = await pool.query('SELECT pagador, sum(total) as totalGastado FROM total_by_person GROUP BY pagador');
+      res.json(rows);
   } catch (error) {
-      console.error('Error al obtener los totales:', error);
-      res.status(500).send('Ocurrió un error al procesar tu solicitud');
+      console.error('Error al obtener los totales:', error.message);
+      res.status(500).json({ error: "Internal server error" });
   }
-});
-
-
-app.post("/gastos", async (req, res) => {
-  console.log("hellou " + JSON.stringify(req.body));
-
-  try {
-    const gasto = await Gasto.create(req.body);
-    res.status(201).json(gasto);
-  } catch (error) {
-    console.error(`Error al procesar la solicitud: ${error.message}`);
-    console.error(error.stack);
-    // Para Sequelize, puedes querer loguear también:
-    console.error(error.errors); // Si están disponibles
-    res.status(500).send("Ocurrió un error en el servidor");
-  }
-});
-
-
-
-
-app.put("/gastos/:id", async (req, res) => {
-  const { id } = req.params;
-  const updatedData = req.body;
-
-  try {
-    const gasto = await Gasto.findByPk(id);
-
-    if (!gasto) {
-      return res.status(404).json({ error: "Gasto not found" });
-    }
-
-    await gasto.update(updatedData);
-    res.json(gasto);
-  } catch (error) {
-    console.error("Error al actualizar el gasto:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-
-
-
-app.delete("/gastos/:id", async (req, res) => {
-  const { id } = req.params;
-  await Gasto.destroy({ where: { id } });
-  res.json({ message: "Gasto deleted" });
 });
 
 app.listen(PORT, () => {
