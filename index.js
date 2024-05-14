@@ -36,10 +36,14 @@ const Gasto = sequelize.define(
       type: DataTypes.NUMBER,
       allowNull: false,
     },
-    comentario: {
+    titulo: {
       type: DataTypes.STRING,
     },
     categoria: {
+      type: DataTypes.NUMBER,
+      allowNull: false,
+    },
+    repartirentre: {
       type: DataTypes.NUMBER,
       allowNull: false,
     },
@@ -91,14 +95,29 @@ app.get("/gastos", async (req, res) => {
 
 
 
+
 app.get("/gastos/:id", async (req, res) => {
-  const { id } = req.params.id;
-  const p = await Gasto.findByPk( id );
-  console.log('req:');
-  console.log(req);
-  //     update(req.body, { where: { id } });
-  res.json( p );
+  const { id } = req.params;
+
+  console.log("id: " + id);
+  
+  try {
+    const gasto = await Gasto.findByPk(id);
+
+    if (!gasto) {
+      return res.status(404).json({ error: "Gasto not found" });
+    }
+
+    res.json(gasto);
+  } catch (error) {
+    console.error("Error al obtener el gasto:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
+
+
+
+
 
 
 app.get('/get-total-by-person', async (req, res) => {
@@ -134,11 +153,30 @@ app.post("/gastos", async (req, res) => {
   }
 });
 
+
+
+
 app.put("/gastos/:id", async (req, res) => {
   const { id } = req.params;
-  const [updated] = await Gasto.update(req.body, { where: { id } });
-  res.json({ message: `Updated ${updated} Gasto(s)` });
+  const updatedData = req.body;
+
+  try {
+    const gasto = await Gasto.findByPk(id);
+
+    if (!gasto) {
+      return res.status(404).json({ error: "Gasto not found" });
+    }
+
+    await gasto.update(updatedData);
+    res.json(gasto);
+  } catch (error) {
+    console.error("Error al actualizar el gasto:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
+
+
+
 
 app.delete("/gastos/:id", async (req, res) => {
   const { id } = req.params;
