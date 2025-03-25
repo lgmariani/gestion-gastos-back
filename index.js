@@ -1,21 +1,26 @@
+require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const mysql = require('mysql2/promise');
+// const dbConfig = require('./config/database');
+
+// Ejemplo de uso con MySQL
+// const connection = mysql.createConnection(dbConfig);
 
 // Configuración de la conexión a la base de datos MySQL
 const pool = mysql.createPool({
-  host: 'localhost',
-  user: 'ggadmin',
-  password: 'pqpq2020',
-  database: 'gestion-gastos',
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'ggadmin',
+  password: process.env.DB_PASSWORD || 'pqpq2020',
+  database: process.env.DB_DATABASE || 'gestion-gastos',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
 });
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3005;
 
 app.use(cors({ origin: '*' }));
 
