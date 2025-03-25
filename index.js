@@ -11,6 +11,7 @@ const mysql = require('mysql2/promise');
 // Configuración de la conexión a la base de datos MySQL
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER || 'ggadmin',
   password: process.env.DB_PASSWORD || 'pqpq2020',
   database: process.env.DB_DATABASE || 'gestion-gastos',
@@ -21,6 +22,7 @@ const pool = mysql.createPool({
 
 // Mostrar variables de entorno
 console.log('DB_HOST:', process.env.DB_HOST);
+console.log('DB_PORT:', process.env.DB_PORT);
 console.log('DB_USER:', process.env.DB_USER);
 console.log('DB_PASSWORD:', process.env.DB_PASSWORD);
 console.log('DB_DATABASE:', process.env.DB_DATABASE);
