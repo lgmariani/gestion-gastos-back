@@ -15,7 +15,7 @@ const pool = mysql.createPool({
 });
 
 const app = express();
-const PORT = 3005;
+const port = process.env.PORT || 3000;
 
 app.use(cors({ origin: '*' }));
 
@@ -27,7 +27,7 @@ app.get("/gastos", async (req, res) => {
     const [rows, fields] = await pool.query('SELECT * FROM Gastos');
     res.json(rows);
   } catch (error) {
-    console.error("Error al obtener los gastos:", error.message);
+    console.error("Error al obtener los gastos:", error.message, error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -51,8 +51,12 @@ app.get("/gastos/:id", async (req, res) => {
 app.post("/gastos", async (req, res) => {
   try {
     const { valor, fecha, pagador, titulo, categoria, repartirentre } = req.body;
-    const result = await pool.query('INSERT INTO Gastos (valor, fecha, pagador, titulo, categoria, repartirentre) VALUES (?, ?, ?, ?, ?, ?)', [valor, fecha, pagador, titulo, categoria, repartirentre]);
-    res.status(201).json({ id: result[0].insertId, ...req.body });
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const result = await pool.query(
+      'INSERT INTO Gastos (valor, fecha, pagador, titulo, categoria, repartirentre, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', 
+      [valor, fecha, pagador, titulo, categoria, repartirentre, now, now]
+    );
+    res.status(201).json({ id: result[0].insertId, ...req.body, createdAt: now, updatedAt: now });
   } catch (error) {
     console.error("Error al crear el gasto:", error.message);
     res.status(500).json({ error: "Internal server error" });
@@ -112,6 +116,6 @@ app.get('/get-total-by-person', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+app.listen(port, () => {
+  console.log(`Servidor corriendo en el puerto ${port}`);
 });
