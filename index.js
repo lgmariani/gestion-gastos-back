@@ -12,9 +12,9 @@ const fs = require('fs');
 const sslConfig = process.env.DB_SSL === 'true'
   ? {
       ca: fs.readFileSync('./DigiCertGlobalRootCA.crt.pem'),
-      rejectUnauthorized: process.env.NODE_ENV === 'production' // Solo verificar certificados en producción
+      rejectUnauthorized: process.env.NODE_ENV === 'production'
     }
-  : {};
+  : undefined;
 
 // Configuración de la conexión a la base de datos MySQL
 const pool = mysql.createPool({
