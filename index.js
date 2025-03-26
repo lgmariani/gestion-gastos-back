@@ -3,10 +3,18 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const mysql = require('mysql2/promise');
+const fs = require('fs');
 // const dbConfig = require('./config/database');
 
 // Ejemplo de uso con MySQL
 // const connection = mysql.createConnection(dbConfig);
+
+const sslConfig = process.env.DB_SSL === 'true'
+  ? {
+      ca: fs.readFileSync('./DigiCertGlobalRootCA.crt.pem'),
+      rejectUnauthorized: true
+    }
+  : {};
 
 // Configuración de la conexión a la base de datos MySQL
 const pool = mysql.createPool({
@@ -15,6 +23,7 @@ const pool = mysql.createPool({
   user: process.env.DB_USER || 'ggadmin',
   password: process.env.DB_PASSWORD || 'pqpq2020',
   database: process.env.DB_DATABASE || 'gestion-gastos',
+  ssl: sslConfig,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
