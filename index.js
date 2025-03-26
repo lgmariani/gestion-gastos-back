@@ -47,11 +47,58 @@ app.use(cors({ origin: '*' }));
 
 app.use(bodyParser.json());
 
-// Endpoint para obtener todos los gastos
+// Endpoint para obtener todos los gastos con paginación y ordenamiento
 app.get("/gastos", async (req, res) => {
   try {
-    const [rows, fields] = await pool.query('SELECT * FROM Gastos');
-    res.json(rows);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    
+    // Parámetros de ordenamiento
+    const sort = req.query.sort || 'fecha'; // Campo por defecto para ordenar
+    const order = (req.query.order || 'desc').toUpperCase(); // Orden por defecto descendente
+    
+    // Lista de campos permitidos para ordenar
+    const allowedSortFields = ['id', 'valor', 'fecha', 'pagador', 'titulo', 'categoria', 'repartirentre', 'createdAt', 'updatedAt'];
+    
+    // Validar que el campo de ordenamiento sea permitido
+    if (!allowedSortFields.includes(sort)) {
+      return res.status(400).json({ error: "Campo de ordenamiento no válido" });
+    }
+    
+    // Validar que el orden sea válido
+    if (!['ASC', 'DESC'].includes(order)) {
+      return res.status(400).json({ error: "Orden no válido. Use 'asc' o 'desc'" });
+    }
+
+    // Obtener el total de registros
+    const [countResult] = await pool.query('SELECT COUNT(*) as total FROM Gastos');
+    const total = countResult[0].total;
+
+    // Obtener los gastos paginados y ordenados
+    const [rows] = await pool.query(
+      `SELECT * FROM Gastos ORDER BY ${sort} ${order} LIMIT ? OFFSET ?`, 
+      [limit, offset]
+    );
+
+    // Calcular el total de páginas
+    const totalPages = Math.ceil(total / limit);
+
+    res.json({
+      data: rows,
+      pagination: {
+        total,
+        totalPages,
+        currentPage: page,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1
+      },
+      sorting: {
+        sort,
+        order
+      }
+    });
   } catch (error) {
     console.error("Error al obtener los gastos:", error.message, error);
     res.status(500).json({ error: "Internal server error" });
