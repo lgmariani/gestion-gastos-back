@@ -12,17 +12,17 @@ const fs = require('fs');
 const sslConfig = process.env.DB_SSL === 'true'
   ? {
       ca: fs.readFileSync('./DigiCertGlobalRootCA.crt.pem'),
-      rejectUnauthorized: true
+      rejectUnauthorized: process.env.NODE_ENV === 'production' // Solo verificar certificados en producción
     }
   : {};
 
 // Configuración de la conexión a la base de datos MySQL
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || 'ggadmin',
-  password: process.env.DB_PASSWORD || 'pqpq2020',
-  database: process.env.DB_DATABASE || 'gestion-gastos',
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_DATABASE,
   ssl: sslConfig,
   waitForConnections: true,
   connectionLimit: 10,
@@ -35,6 +35,8 @@ console.log('DB_PORT:', process.env.DB_PORT);
 console.log('DB_USER:', process.env.DB_USER);
 console.log('DB_PASSWORD:', process.env.DB_PASSWORD);
 console.log('DB_DATABASE:', process.env.DB_DATABASE);
+console.log('DB_SSL:', process.env.DB_SSL);
+console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('PORT:', process.env.PORT);
 
 
