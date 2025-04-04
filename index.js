@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
-const mysql = require('mysql2/promise');
+const { Pool } = require('pg');
 const fs = require('fs');
 // const dbConfig = require('./config/database');
 
@@ -14,19 +14,16 @@ const sslConfig = process.env.DB_SSL === 'true'
       ca: fs.readFileSync('./DigiCertGlobalRootCA.crt.pem'),
       rejectUnauthorized: process.env.NODE_ENV === 'production'
     }
-  : undefined;
+  : false;
 
-// Configuración de la conexión a la base de datos MySQL
-const pool = mysql.createPool({
+// Configuración de la conexión a la base de datos PostgreSQL
+const pool = new Pool({
   host: process.env.DB_HOST,
   port: process.env.DB_PORT,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
-  ssl: sslConfig,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+  ssl: sslConfig
 });
 
 // Mostrar variables de entorno
@@ -37,11 +34,11 @@ console.log('DB_PASSWORD:', process.env.DB_PASSWORD);
 console.log('DB_DATABASE:', process.env.DB_DATABASE);
 console.log('DB_SSL:', process.env.DB_SSL);
 console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('PORT:', process.env.PORT);
+console.log('PORT:', process.env.APP_PORT);
 
 
 const app = express();
-const port = process.env.PORT || 3005;
+const port = process.env.APP_PORT || 3005;
 
 app.use(cors({ origin: '*' }));
 
@@ -55,37 +52,34 @@ app.get("/gastos", async (req, res) => {
     const offset = (page - 1) * limit;
     
     // Parámetros de ordenamiento
-    const sort = req.query.sort || 'fecha'; // Campo por defecto para ordenar
-    const order = (req.query.order || 'desc').toUpperCase(); // Orden por defecto descendente
+    const sort = req.query.sort || 'fecha';
+    const order = (req.query.order || 'desc').toUpperCase();
     
     // Lista de campos permitidos para ordenar
-    const allowedSortFields = ['id', 'valor', 'fecha', 'pagador', 'titulo', 'categoria', 'repartirentre', 'createdAt', 'updatedAt'];
+    const allowedSortFields = ['id', 'valor', 'fecha', 'pagador', 'titulo', 'categoria', 'repartirentre', 'created_at', 'updated_at'];
     
-    // Validar que el campo de ordenamiento sea permitido
     if (!allowedSortFields.includes(sort)) {
       return res.status(400).json({ error: "Campo de ordenamiento no válido" });
     }
     
-    // Validar que el orden sea válido
     if (!['ASC', 'DESC'].includes(order)) {
       return res.status(400).json({ error: "Orden no válido. Use 'asc' o 'desc'" });
     }
 
     // Obtener el total de registros
-    const [countResult] = await pool.query('SELECT COUNT(*) as total FROM Gastos');
-    const total = countResult[0].total;
+    const countResult = await pool.query('SELECT COUNT(*) as total FROM gastos');
+    const total = parseInt(countResult.rows[0].total);
 
     // Obtener los gastos paginados y ordenados
-    const [rows] = await pool.query(
-      `SELECT * FROM Gastos ORDER BY ${sort} ${order} LIMIT ? OFFSET ?`, 
+    const result = await pool.query(
+      `SELECT * FROM gastos ORDER BY ${sort} ${order} LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
 
-    // Calcular el total de páginas
     const totalPages = Math.ceil(total / limit);
 
     res.json({
-      data: rows,
+      data: result.rows,
       pagination: {
         total,
         totalPages,
@@ -100,7 +94,7 @@ app.get("/gastos", async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Error al obtener los gastos:", error.message, error);
+    console.error("Error al obtener los gastos:", error.message);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -108,9 +102,9 @@ app.get("/gastos", async (req, res) => {
 // Endpoint para obtener un gasto por ID
 app.get("/gastos/:id", async (req, res) => {
   try {
-    const [rows, fields] = await pool.query('SELECT * FROM Gastos WHERE id = ?', [req.params.id]);
-    if (rows.length > 0) {
-      res.json(rows[0]);
+    const result = await pool.query('SELECT * FROM gastos WHERE id = $1', [req.params.id]);
+    if (result.rows.length > 0) {
+      res.json(result.rows[0]);
     } else {
       res.status(404).json({ error: "Gasto not found" });
     }
@@ -124,12 +118,12 @@ app.get("/gastos/:id", async (req, res) => {
 app.post("/gastos", async (req, res) => {
   try {
     const { valor, fecha, pagador, titulo, categoria, repartirentre } = req.body;
-    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const now = new Date().toISOString();
     const result = await pool.query(
-      'INSERT INTO Gastos (valor, fecha, pagador, titulo, categoria, repartirentre, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', 
+      'INSERT INTO gastos (valor, fecha, pagador, titulo, categoria, repartirentre, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
       [valor, fecha, pagador, titulo, categoria, repartirentre, now, now]
     );
-    res.status(201).json({ id: result[0].insertId, ...req.body, createdAt: now, updatedAt: now });
+    res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error("Error al crear el gasto:", error.message);
     res.status(500).json({ error: "Internal server error" });
@@ -140,9 +134,12 @@ app.post("/gastos", async (req, res) => {
 app.put("/gastos/:id", async (req, res) => {
   try {
     const { valor, fecha, pagador, titulo, categoria, repartirentre } = req.body;
-    const result = await pool.query('UPDATE Gastos SET valor = ?, fecha = ?, pagador = ?, titulo = ?, categoria = ?, repartirentre = ? WHERE id = ?', [valor, fecha, pagador, titulo, categoria, repartirentre, req.params.id]);
-    if (result[0].affectedRows > 0) {
-      res.json({ id: req.params.id, ...req.body });
+    const result = await pool.query(
+      'UPDATE gastos SET valor = $1, fecha = $2, pagador = $3, titulo = $4, categoria = $5, repartirentre = $6, updated_at = $7 WHERE id = $8 RETURNING *',
+      [valor, fecha, pagador, titulo, categoria, repartirentre, new Date().toISOString(), req.params.id]
+    );
+    if (result.rows.length > 0) {
+      res.json(result.rows[0]);
     } else {
       res.status(404).json({ error: "Gasto not found" });
     }
@@ -155,8 +152,8 @@ app.put("/gastos/:id", async (req, res) => {
 // Endpoint para eliminar un gasto
 app.delete("/gastos/:id", async (req, res) => {
   try {
-    const result = await pool.query('DELETE FROM Gastos WHERE id = ?', [req.params.id]);
-    if (result[0].affectedRows > 0) {
+    const result = await pool.query('DELETE FROM gastos WHERE id = $1 RETURNING *', [req.params.id]);
+    if (result.rows.length > 0) {
       res.json({ message: "Gasto deleted" });
     } else {
       res.status(404).json({ error: "Gasto not found" });
@@ -167,25 +164,25 @@ app.delete("/gastos/:id", async (req, res) => {
   }
 });
 
-// Solucionar el problema con la vista 'total-by-person'
+// Endpoint para obtener totales por persona
 app.get('/get-total-by-person-new', async (req, res) => {
   try {
-      const [rows, fields] = await pool.query('SELECT * FROM total_by_person');
-      res.json(rows);
+    const result = await pool.query('SELECT * FROM total_by_person');
+    res.json(result.rows);
   } catch (error) {
-      console.error('Error al obtener los totales:', error.message);
-      res.status(500).json({ error: "Internal server error" });
+    console.error('Error al obtener los totales:', error.message);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// Solucionar el problema con la vista 'total-by-person'
+// Endpoint para obtener totales por persona (agrupado)
 app.get('/get-total-by-person', async (req, res) => {
   try {
-      const [rows, fields] = await pool.query('SELECT pagador, sum(total) as totalGastado FROM total_by_person GROUP BY pagador');
-      res.json(rows);
+    const result = await pool.query('SELECT pagador, sum(total) as total_gastado FROM total_by_person GROUP BY pagador');
+    res.json(result.rows);
   } catch (error) {
-      console.error('Error al obtener los totales:', error.message);
-      res.status(500).json({ error: "Internal server error" });
+    console.error('Error al obtener los totales:', error.message);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

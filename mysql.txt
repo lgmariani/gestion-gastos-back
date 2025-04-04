@@ -1,3 +1,15 @@
-$Top@cio2024!M.4
+usuario: ggadmin
+contraseñas:
+    $Top@cio2024!M.4
+    pqpq2020
+    pqpq2020!
 
-ggadmin pqpq2020
+
+inifinityfree: no permite acceso externo
+clever-clooud: no permite bd directa y parece cobrar
+render: no admite mysql (sí postgres y parece andar bien)
+freedb.tech: tira error conn refused
+vercel: no admite bbdd
+azure: daba error porque si. tuve que hacer otra
+
+
