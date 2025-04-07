@@ -2,15 +2,21 @@ version: '3.4'
 
 services:
   gestiongastosbackend:
-    image: gestiongastosbackend
+    image: gestiongastosbackend:latest
     build:
       context: .
       dockerfile: ./Dockerfile
     environment:
       NODE_ENV: development
+      DEBUG: '*'
+    env_file:
+      - .env
     ports:
       - 3000:3000
       - 3005:3005
       - 8080:8080
       - 9229:9229
-    command: ["node", "--inspect=0.0.0.0:9229", "index.js"]
+    command: node --inspect=0.0.0.0:9229 index.js
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
